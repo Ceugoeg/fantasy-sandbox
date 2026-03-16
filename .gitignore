@@ -1,0 +1,33 @@
+# =========================
+# C++ 引擎编译产物 (engine)
+# =========================
+# 忽略整个构建目录
+/engine/build/
+/engine/bin/
+# 忽略编译过程中产生的中间文件和可执行程序
+*.o
+*.out
+*.exe
+fantasy_engine
+CMakeCache.txt
+CMakeFiles/
+
+# =========================
+# Node.js 后端依赖 (server)
+# =========================
+# 忽略依赖
+/server/node_modules/
+# 忽略 npm 的报错日志
+npm-debug.log*
+yarn-error.log*
+
+# =========================
+# 编辑器与操作系统缓存
+# =========================
+# VSCode 的本地配置
+.vscode/
+# Ubuntu/Linux 下 Vim 异常退出产生的交换文件
+*.swp
+*.swo
+# 忽略 macOS 产生的系统文件（防患于未然）
+.DS_Store

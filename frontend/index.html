@@ -1,0 +1,16 @@
+<h1>Hello Isekai!</h1>
+<body>
+    <script>
+        
+        const socket = new WebSocket('ws://localhost:3000');
+        
+        socket.onopen = () => {
+            console.log('Connected to Isekai Server...');
+            socket.send('Yuusya here!')
+        };
+
+        socket.onmessage = (event) => {
+            console.log('Heard from Server: ', event.data);
+        };
+    </script>
+</body>
