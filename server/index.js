@@ -4,6 +4,7 @@ const path = require('path');
 const WebSocket = require('ws');
 const { spawn } = require('child_process');
 
+// --- MIME 类型字典 ---
 const MIME_TYPES = {
     '.html': 'text/html',
     '.js': 'text/javascript',
@@ -12,16 +13,15 @@ const MIME_TYPES = {
     '.css': 'text/css'
 };
 
+// --- 1. 静态资源路由与 HTTP 服务器 ---
 const server = http.createServer((req, res) => {
-    
     let filePath = '';
-
     if (req.url === '/' || req.url === '/index.html') {
-        filePath = path.join(__dirname, "../frontend/index.html");
+        filePath = path.join(__dirname, '../frontend/index.html');
     } else if (req.url.startsWith('/src/')) {
-        filePath = path.join(__dirname, "../frontend", req.url);
+        filePath = path.join(__dirname, '../frontend', req.url);
     } else if (req.url.startsWith('/assets/')) {
-        filePath = path.join(__dirname, "..", req.url);
+        filePath = path.join(__dirname, '..', req.url);
     } else {
         res.writeHead(404);
         res.end("Not Found in this World");
@@ -33,7 +33,7 @@ const server = http.createServer((req, res) => {
 
     fs.readFile(filePath, (err, data) => {
         if (err) {
-            console.error(`[HTTP] 资源读取失败 ${filePath}: ${err.code}`);
+            console.error(`Failed at loading resources: ${filePath}: ${err.code}`);
             res.writeHead(404);
             res.end("File not found");
         } else {
@@ -43,25 +43,17 @@ const server = http.createServer((req, res) => {
     });
 });
 
-const wss = new WebSocket.Server({ server: server });
+// --- 2. WebSocket 服务器与 C++ 引擎桥接 ---
+const wss = new WebSocket.Server({ server });
+
 wss.on('connection', (ws) => {
-    
-    // console.log('A new soul has arrived...');
-    console.log('Frontend renderer connected...');
-
-    // ws.on('message', (message) => {
-    //     console.log('Heard people praying...\n>> %s', message);
-    //     ws.send('Oracel: I\'ve received your call...');
-    // });
-
-    // ws.send('Welcome to The Fantasy.')
+    console.log('Connected frontend renderer');
 });
 
+// --- 【核心修正】：跨平台且兼容多配置的引擎路径探测 ---
 const isWindows = process.platform === 'win32';
 const engineFilename = isWindows ? 'fantasy_engine.exe' : 'fantasy_engine';
-console.log(`Trying to ignite the engine at: ${enginePath}`);
 
-// 探测可能的路径列表
 const possiblePaths = [
     path.join(__dirname, '../engine/build', engineFilename),           // Linux 默认 & Windows MinGW
     path.join(__dirname, '../engine/build/Debug', engineFilename),     // Windows MSVC Debug 模式
@@ -72,18 +64,17 @@ const possiblePaths = [
 let enginePath = possiblePaths.find(p => fs.existsSync(p));
 
 if (!enginePath) {
-    console.error("Could not find the binary file");
-    console.error("Tried paths:", possiblePaths);
+    console.error("Cannot find binary file");
+    console.error("Tried paths:\n", possiblePaths.join('\n'));
     process.exit(1); 
 }
 
-console.log(`Successfully located engine: ${enginePath}`);
+console.log(`Located engine: ${enginePath}`);
 const engineProcess = spawn(enginePath);
 
+// 监听引擎的 JSON 数据流并广播
 engineProcess.stdout.on('data', (data) => {
-    
     const jsonString = data.toString().trim();
-    
     wss.clients.forEach((client) => {
         if (client.readyState === WebSocket.OPEN) {
             client.send(jsonString);
@@ -92,13 +83,14 @@ engineProcess.stdout.on('data', (data) => {
 });
 
 engineProcess.stderr.on('data', (data) => {
-    console.error(`[Engine Error] ${data.toString()}`);
+    console.error(`Engine error: ${data.toString()}`);
 });
 
 engineProcess.on('close', (code) => {
-    console.log(`Fantasy Engine shut down with code ${code}`);
+    console.log(`Engine shut down: ${code}`);
 });
 
+// --- 3. 启动监听 ---
 server.listen(3000, () => {
-    console.log("Isekai Gate Opened at port 3000...")
+    console.log("Isekai Gate Opened at port 3000...");
 });
