@@ -31,3 +31,11 @@ yarn-error.log*
 *.swo
 # 忽略 macOS 产生的系统文件（防患于未然）
 .DS_Store
+# VS
+.vs/
+# Windows
+*.user
+*.suo
+*.sln
+*.vcxproj
+*.vcxproj.filters
