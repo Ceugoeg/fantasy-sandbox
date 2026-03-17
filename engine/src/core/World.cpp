@@ -79,7 +79,8 @@ std::string World::exportStateAsJson() const {
         ss << "{";
         ss << "\"id\": " << entities_[i]->getId() << ", ";
         ss << "\"x\": " << entities_[i]->getX() << ", ";
-        ss << "\"y\": " << entities_[i]->getY();
+        ss << "\"y\": " << entities_[i]->getY() << ", ";
+        ss << "\"state\": \"" << entities_[i]->getStateAsString() << "\"";
         ss << "}";
         
         // 如果不是最后一个实体，加上逗号分隔

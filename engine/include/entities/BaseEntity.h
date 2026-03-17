@@ -1,8 +1,8 @@
 #pragma once
 
-// 只是告诉编译器“有一个叫 World 的类存在”，而不去 #include "core/World.h"。
-// 因为 World.h 里面又包含了 BaseEntity.h 的引用，如果互相 include 会导致严重的“循环依赖”编译报错。
-// 只要我们在头文件中只使用 World 的引用（&）或指针（*），前向声明就足够了。
+#include <string>
+
+// 前向声明 World 类
 namespace fsb {
 namespace core {
     class World;
@@ -12,24 +12,30 @@ namespace core {
 namespace fsb {
 namespace entities {
 
+enum class EntityState {
+    IDLE,
+    MOVING
+};
+
 class BaseEntity {
 protected:
-    // 将基础属性设为 protected，这样未来具体的模板实体类（派生类）可以直接访问它们
     int id_;
     int x_;
     int y_;
 
+    // FSM 状态数据
+    EntityState state_;
+    int state_ticks_; // 记录在当前状态下已经持续了多少个 Tick (时间跨度)
+
 public:
-    BaseEntity(int id, int x, int y) : id_(id), x_(x), y_(y) {}
+    BaseEntity(int id, int x, int y) 
+        : id_(id), x_(x), y_(y), state_(EntityState::IDLE), state_ticks_(0) {}
 
     virtual ~BaseEntity() = default;
 
-    // 强制所有继承自 BaseEntity 的类必须实现自己的更新逻辑。
-    // 传入 World 的引用，让实体能够“感知”周围的环境。
     virtual void update(core::World& world) = 0;
 
     // --- 基础 Getter 与 Setter ---
-    // 这些非虚函数在编译期就能确定地址，调用效率极高
     int getId() const { return id_; }
     int getX() const { return x_; }
     int getY() const { return y_; }
@@ -37,6 +43,25 @@ public:
     void setPosition(int x, int y) {
         x_ = x;
         y_ = y;
+    }
+
+    // --- 状态机 Getter 与 Setter ---
+    EntityState getState() const { return state_; }
+    void setState(EntityState state) { state_ = state; }
+    
+    int getStateTicks() const { return state_ticks_; }
+    void setStateTicks(int ticks) { state_ticks_ = ticks; }
+    
+    // 状态自增（供 Policy 在每次 update 时调用）
+    void incrementStateTicks() { state_ticks_++; }
+
+    // 辅助函数：将内部枚举转换为字符串，方便 World 导出 JSON 给前端
+    std::string getStateAsString() const {
+        switch (state_) {
+            case EntityState::IDLE:   return "idle";
+            case EntityState::MOVING: return "moving";
+            default:                  return "unknown";
+        }
     }
 };
 
