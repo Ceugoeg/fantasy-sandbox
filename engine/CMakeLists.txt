@@ -15,4 +15,10 @@ set(SOURCES
 # 未来如果要和 Node.js 深度绑定，可以修改为生成共享库 (add_library)
 add_executable(fantasy_engine ${SOURCES})
 
-target_compile_options(fantasy_engine PRIVATE -Wall -Wextra)
+if(MSVC)
+    # Windows MSVC 的警告等级设置
+    target_compile_options(fantasy_engine PRIVATE /W4)
+else()
+    # GCC 或 Clang 的警告等级设置
+    target_compile_options(fantasy_engine PRIVATE -Wall -Wextra)
+endif()
