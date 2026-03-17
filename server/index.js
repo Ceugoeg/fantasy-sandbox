@@ -57,8 +57,27 @@ wss.on('connection', (ws) => {
     // ws.send('Welcome to The Fantasy.')
 });
 
-const enginePath = path.join(__dirname, '../engine/build/fantasy_engine');
+const isWindows = process.platform === 'win32';
+const engineFilename = isWindows ? 'fantasy_engine.exe' : 'fantasy_engine';
 console.log(`Trying to ignite the engine at: ${enginePath}`);
+
+// 探测可能的路径列表
+const possiblePaths = [
+    path.join(__dirname, '../engine/build', engineFilename),           // Linux 默认 & Windows MinGW
+    path.join(__dirname, '../engine/build/Debug', engineFilename),     // Windows MSVC Debug 模式
+    path.join(__dirname, '../engine/build/Release', engineFilename)    // Windows MSVC Release 模式
+];
+
+// 寻找第一个真实存在的文件
+let enginePath = possiblePaths.find(p => fs.existsSync(p));
+
+if (!enginePath) {
+    console.error("Could not find the binary file");
+    console.error("Tried paths:", possiblePaths);
+    process.exit(1); 
+}
+
+console.log(`Successfully located engine: ${enginePath}`);
 const engineProcess = spawn(enginePath);
 
 engineProcess.stdout.on('data', (data) => {
