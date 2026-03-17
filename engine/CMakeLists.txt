@@ -17,7 +17,7 @@ add_executable(fantasy_engine ${SOURCES})
 
 if(MSVC)
     # Windows MSVC 的警告等级设置
-    target_compile_options(fantasy_engine PRIVATE /W4)
+    target_compile_options(fantasy_engine PRIVATE /W4 /utf-8)
 else()
     # GCC 或 Clang 的警告等级设置
     target_compile_options(fantasy_engine PRIVATE -Wall -Wextra)
