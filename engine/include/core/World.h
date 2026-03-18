@@ -3,6 +3,7 @@
 #include <vector>
 #include <memory>
 #include <string>
+#include "core/EventBus.h"
 
 // 建立命名空间，防止大型工程中的命名冲突
 namespace fsb {      // Fantasy Sandbox
@@ -35,6 +36,8 @@ private:
     // 二维 vector 会在堆内存中产生大量碎片，导致 CPU Cache 命中率极低。
     // 使用一维 vector 模拟二维网格（通过 y * width + x 寻址）在内存上是连续的，性能最佳。
     std::vector<int> terrain_;
+
+    EventBus event_bus_;
 
 public:
     // 构造函数：开天辟地，指定沙盘大小
@@ -77,6 +80,7 @@ public:
     int getWidth() const { return width_; }
     int getHeight() const { return height_; }
     unsigned long long getCurrentTick() const { return current_tick_; }
+    EventBus& getEventBus() { return event_bus_; }
 };
 
 } // namespace core

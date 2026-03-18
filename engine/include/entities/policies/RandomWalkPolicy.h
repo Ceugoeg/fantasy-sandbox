@@ -3,6 +3,7 @@
 #include <cstdlib> // 提供 std::rand()
 #include "entities/BaseEntity.h"
 #include "core/World.h"
+#include "events/GameEvents.h"
 
 namespace fsb {
 namespace entities {
@@ -26,6 +27,14 @@ public:
                 if (current_ticks >= IDLE_DURATION) {
                     entity.setState(EntityState::MOVING);
                     entity.setStateTicks(0);
+
+                    // 拆分写法：先显式实例化事件对象，再发布，治好 IDE 的晕车
+                    fsb::events::EntityStateChangedEvent event{
+                        entity.getId(),
+                        EntityState::IDLE,
+                        EntityState::MOVING
+                    };
+                    world.getEventBus().publish(event);
                 }
                 break;
             }
@@ -36,12 +45,32 @@ public:
                 int new_y = entity.getY() + dy;
 
                 if (world.getTerrainAt(new_x, new_y) == 0) {
+                    int old_x = entity.getX();
+                    int old_y = entity.getY();
                     entity.setPosition(new_x, new_y);
+
+                    if (old_x != new_x || old_y != new_y) {
+                        // 拆分写法
+                        fsb::events::EntityMovedEvent event{
+                            entity.getId(),
+                            old_x, old_y,
+                            new_x, new_y
+                        };
+                        world.getEventBus().publish(event);
+                    }
                 }
 
                 if (current_ticks >= MOVE_DURATION) {
                     entity.setState(EntityState::IDLE);
                     entity.setStateTicks(0);
+
+                    // 拆分写法
+                    fsb::events::EntityStateChangedEvent event{
+                        entity.getId(),
+                        EntityState::MOVING,
+                        EntityState::IDLE
+                    };
+                    world.getEventBus().publish(event);
                 }
                 break;
             }

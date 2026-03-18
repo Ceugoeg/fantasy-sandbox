@@ -45,21 +45,20 @@ fantasy-sandbox/
 ├── server/                      # Node.js 网关（世界通信与进程管理）
 │   ├── package.json             # 后端依赖配置（WebSocket）
 │   └── index.js                 # 静态资源分发、子进程保活与 JSON 广播管道
-└── engine/                      # C++ 核心世界引擎（物理世界唯一真理）
-    ├── CMakeLists.txt           # C++ 现代构建配置
+└── engine/
     ├── include/
     │   ├── core/
-    │   │   ├── World.h          # 空间与时间管理（网格与 Tick）
-    │   │   └── EventBus.h       # [规划中] 基于多态与泛型的核心事件总线
-    │   ├── events/              
-    │   │   └── GameEvents.h     # [规划中] 纯数据容器的事件定义
+    │   │   ├── World.h              # [修改] 持有 EventBus 实例，作为全局事件中枢
+    │   │   └── EventBus.h           # [新增] 基于 std::type_index 与 std::any 的事件总线
+    │   ├── events/
+    │   │   └── GameEvents.h         # [新增] 纯数据结构 (POD)，如 EntityStateChangedEvent
     │   └── entities/
-    │       ├── BaseEntity.h     # 实体基类（包含 FSM 基础状态数据）
-    │       ├── Entity.h         # Policy-Based Design 的模板实体外壳
+    │       ├── BaseEntity.h         # [修改] 保持原有职责，定义 virtual void update(World&) = 0
+    │       ├── Entity.h             # [重构] 升级为 template <typename... Policies> 变长模板参数
     │       └── policies/
-    │           └── RandomWalkPolicy.h # 实体具体行为逻辑（目前包含简单的 FSM 流转）
+    │           └── RandomWalkPolicy.h   # [修改] 适配变长模板的签名，并在状态改变时发布事件
     └── src/
         ├── core/
-        │   └── World.cpp        # 核心系统实现与 JSON 快照导出
-        └── main.cpp             # 引擎入口（Tick 死循环与 stdout 刷新）
+        │   └── World.cpp            # [修改] 初始化 EventBus，可能增加分发机制
+        └── main.cpp                 # [修改] 订阅事件总线，捕获史莱姆的状态变化并打印日志
 ```
