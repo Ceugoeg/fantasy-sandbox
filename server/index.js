@@ -48,6 +48,16 @@ const wss = new WebSocket.Server({ server });
 
 wss.on('connection', (ws) => {
     console.log('Connected frontend renderer');
+
+    // 【新增】：监听前端发来的指令，并作为神谕转发给 C++ 引擎
+    ws.on('message', (message) => {
+        const cmd = message.toString().trim();
+        console.log(`[Oracle Gateway] Passing command to engine: ${cmd}`);
+        // 必须加上 \n，因为 C++ 端是靠 std::getline 按行读取的
+        if (engineProcess && !engineProcess.killed) {
+            engineProcess.stdin.write(cmd + '\n');
+        }
+    });
 });
 
 // --- 【核心修正】：跨平台且兼容多配置的引擎路径探测 ---
@@ -75,6 +85,9 @@ const engineProcess = spawn(enginePath);
 // 监听引擎的 JSON 数据流并广播
 engineProcess.stdout.on('data', (data) => {
     const jsonString = data.toString().trim();
+    // 过滤掉空行，防止前端 JSON 解析崩溃
+    if (!jsonString) return;
+    
     wss.clients.forEach((client) => {
         if (client.readyState === WebSocket.OPEN) {
             client.send(jsonString);
@@ -82,8 +95,15 @@ engineProcess.stdout.on('data', (data) => {
     });
 });
 
+// 将引擎的错误或日志输出也引流到 Node.js 控制台，方便调试
 engineProcess.stderr.on('data', (data) => {
-    console.error(`Engine error: ${data.toString()}`);
+    // 按换行符分割接收到的数据块
+    const lines = data.toString().trim().split('\n');
+    lines.forEach(line => {
+        if (line) {
+            console.error(`[Engine Log]: ${line}`);
+        }
+    });
 });
 
 engineProcess.on('close', (code) => {
