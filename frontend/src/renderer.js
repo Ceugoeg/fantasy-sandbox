@@ -74,6 +74,21 @@ function setupInputs() {
 
 function setupNetwork() {
     const socket = new WebSocket('ws://localhost:3000');
+
+    // 【新增】：造物主权杖 —— 将控制接口挂载到全局 window 对象
+    window.socket = socket;
+    window.spawn = (type, x, y) => {
+        if (socket.readyState === WebSocket.OPEN) {
+            // 构建符合 C++ 引擎解析格式的神谕字符串，确保坐标是整数
+            const cmd = `SPAWN ${type} ${Math.floor(x)} ${Math.floor(y)}`;
+            socket.send(cmd);
+            // 在控制台打印带颜色的炫酷神谕日志
+            console.log(`%c[Oracle]%c Casted miracle: ${cmd}`, 'color: #ffd700; font-weight: bold;', 'color: inherit;');
+        } else {
+            console.error("[Oracle] The Isekai Gate is closed or not ready.");
+        }
+    };
+
     socket.onmessage = (event) => {
         const data = JSON.parse(event.data);
         data.entities.forEach(serverEntity => {
@@ -122,7 +137,6 @@ function render(timestamp) {
                 const sx = (localId % tilesetCols) * TILE_SIZE;
                 const sy = Math.floor(localId / tilesetCols) * TILE_SIZE;
 
-                // 手动计算每个格子在屏幕上的绝对整数坐标。
                 const screenX = Math.round((c * TILE_SIZE - camera.x) * camera.zoom);
                 const screenY = Math.round((r * TILE_SIZE - camera.y) * camera.zoom);
                 const nextScreenX = Math.round(((c + 1) * TILE_SIZE - camera.x) * camera.zoom);
@@ -142,7 +156,7 @@ function render(timestamp) {
 
     // --- B. 手动投影绘制实体 ---
     shadowEntities.forEach(entity => {
-        const lerpFactor = 0.1;
+        const lerpFactor = 0.02;
         entity.x += (entity.targetX - entity.x) * lerpFactor;
         entity.y += (entity.targetY - entity.y) * lerpFactor;
 
@@ -162,7 +176,6 @@ function render(timestamp) {
         const worldPxX = entity.x * TILE_SIZE;
         const worldPxY = entity.y * TILE_SIZE;
         
-        // 史莱姆宽32，图块宽16，需要向左偏移 8 个世界像素以居中
         const drawScreenX = Math.round((worldPxX - 8 - camera.x) * camera.zoom);
         const drawScreenY = Math.round((worldPxY - camera.y) * camera.zoom);
 
