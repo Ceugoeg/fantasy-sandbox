@@ -1,25 +1,68 @@
 #include "core/World.h"
-// 引入即将编写的基类头文件，因为我们需要调用实体的接口
-#include "entities/BaseEntity.h" 
+#include "entities/BaseEntity.h"
 
 #include <algorithm>
-#include <sstream>
+#include <fstream>
+#include <iostream>
+
+// 引入单头文件 JSON 库
+#include <nlohmann/json.hpp>
+
+using json = nlohmann::json;
 
 namespace fsb {
 namespace core {
 
-World::World(int width, int height)
-    : width_(width), height_(height), current_tick_(0) {
-    // 创世第一步：初始化地形网格。
-    // std::vector 的 resize 会分配内存并用指定的值（这里是 0，代表平地）填满。
+World::World(const std::string& map_file_path)
+    : current_tick_(0) {
+    
+    // 1. 读取并解析 Tiled JSON 地图文件
+    std::ifstream file(map_file_path);
+    if (!file.is_open()) {
+        std::cerr << "[World] FATAL ERROR: Cannot open map file: " << map_file_path << std::endl;
+        exit(EXIT_FAILURE);
+    }
+
+    json map_json;
+    file >> map_json;
+
+    // 2. 初始化世界尺度
+    width_ = map_json["width"];
+    height_ = map_json["height"];
+
     terrain_.resize(width_ * height_, 0);
+    collision_.resize(width_ * height_, 0);
+
+    // 3. 遍历解析图层 (Data Sync & Mask Stripping)
+    if (map_json.contains("layers")) {
+        for (const auto& layer : map_json["layers"]) {
+            if (layer["type"] == "tilelayer") {
+                std::string layer_name = layer["name"];
+                const auto& data = layer["data"];
+                
+                for (size_t i = 0; i < data.size(); ++i) {
+                    unsigned int raw_id = data[i];
+                    
+                    // 极客位运算：按位与 0x1FFFFFFF，干净利落地剔除高 3 位的旋转/翻转标志
+                    int real_id = raw_id & 0x1FFFFFFF;
+
+                    // 将净化后的物理真理写入对应的感知容器
+                    if (layer_name == "floor") {
+                        terrain_[i] = real_id;
+                    } else if (layer_name == "obstacle") {
+                        collision_[i] = real_id;
+                    }
+                }
+            }
+        }
+    }
+
+    std::cerr << "[World] Genesis complete. Map loaded: " << width_ << "x" << height_ << std::endl;
 }
 
 void World::tick() {
     current_tick_++;
     
-    // 遍历所有实体，调用它们的更新逻辑。
-    // 将 *this（世界本身的引用）传给实体，让实体能够“观察”世界（比如获取周围地形）。
     for (auto& entity : entities_) {
         entity->update(*this);
     }
@@ -30,9 +73,6 @@ void World::addEntity(std::shared_ptr<fsb::entities::BaseEntity> entity) {
 }
 
 void World::removeEntity(int entity_id) {
-    // 【C++ 经典惯用法：Erase-Remove Idiom】
-    // std::remove_if 并不会真正删除元素，而是把需要保留的元素往前挪，返回一个逻辑上的新结尾迭代器。
-    // 然后再调用 vector 的 erase 方法，把尾部多余的废弃元素彻底抹除。
     entities_.erase(
         std::remove_if(entities_.begin(), entities_.end(),
             [entity_id](const std::shared_ptr<fsb::entities::BaseEntity>& e) {
@@ -43,12 +83,19 @@ void World::removeEntity(int entity_id) {
 }
 
 int World::getTerrainAt(int x, int y) const {
-    // 越界检查：如果越界，返回 -1（可以被定义为虚空或阻挡物）
     if (x < 0 || x >= width_ || y < 0 || y >= height_) {
-        return -1; 
+        return -1; // 虚空/边界外
     }
-    // 【一维模拟二维原理】：y 乘以宽度，再加上 x，精准命中内存中的一维地址。
     return terrain_[y * width_ + x];
+}
+
+bool World::isBlocked(int x, int y) const {
+    // 越界视为绝对阻挡
+    if (x < 0 || x >= width_ || y < 0 || y >= height_) {
+        return true; 
+    }
+    // 只要 obstacle 图层对应的格子上不是 0（有树木/石头），就不允许通行
+    return collision_[y * width_ + x] > 0;
 }
 
 std::vector<std::shared_ptr<fsb::entities::BaseEntity>> World::getEntitiesInRange(int x, int y, int radius) const {
@@ -58,8 +105,6 @@ std::vector<std::shared_ptr<fsb::entities::BaseEntity>> World::getEntitiesInRang
         int ex = entity->getX();
         int ey = entity->getY();
         
-        // 性能优化细节：计算欧几里得距离时，比较距离平方而不是实际距离。
-        // 即判断 $d^2 \le r^2$ 而不是 $d \le r$，从而避免极其消耗 CPU 指令周期的 std::sqrt 开平方运算。
         int dist_sq = (ex - x) * (ex - x) + (ey - y) * (ey - y);
         if (dist_sq <= radius * radius) {
             result.push_back(entity);
@@ -69,29 +114,23 @@ std::vector<std::shared_ptr<fsb::entities::BaseEntity>> World::getEntitiesInRang
 }
 
 std::string World::exportStateAsJson() const {
-    // 手工拼接 JSON 字符串，准备通过网络发给 Node.js
-    std::stringstream ss;
-    ss << "{";
-    ss << "\"tick\": " << current_tick_ << ", ";
-    ss << "\"entities\": [";
+    // 彻底摒弃危险的字符串手工拼接，采用 nlohmann/json 结构化构建快照
+    json j;
+    j["tick"] = current_tick_;
+    j["entities"] = json::array();
     
-    for (size_t i = 0; i < entities_.size(); ++i) {
-        ss << "{";
-        ss << "\"id\": " << entities_[i]->getId() << ", ";
-        ss << "\"x\": " << entities_[i]->getX() << ", ";
-        ss << "\"y\": " << entities_[i]->getY() << ", ";
-        ss << "\"state\": \"" << entities_[i]->getStateAsString() << "\"";
-        ss << "}";
-        
-        // 如果不是最后一个实体，加上逗号分隔
-        if (i < entities_.size() - 1) {
-            ss << ", ";
-        }
+    for (const auto& entity : entities_) {
+        j["entities"].push_back({
+            {"id", entity->getId()},
+            {"type", entity->getTypeName()}, // 暴露 type，供前端多态渲染匹配
+            {"x", entity->getX()},
+            {"y", entity->getY()},
+            {"state", entity->getStateAsString()}
+        });
     }
-    ss << "]";
-    ss << "}";
     
-    return ss.str();
+    // dump() 默认生成无缩进、无多余空格的紧凑字符串，极致节省 WebSocket 带宽
+    return j.dump(); 
 }
 
 } // namespace core

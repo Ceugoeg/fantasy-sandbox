@@ -16,19 +16,19 @@
 * **虚拟摄像机**：引入 Camera Culling（视锥剔除）算法，仅渲染视口内的图块与实体，为未来支撑万级实体的超大规模地图预留性能空间。
 * **平滑插值 (Lerp)**：在前端实现基于时间戳的插值状态机，有效弥合后端低频 Tick (如 20Hz) 与前端高频刷新 (60Hz+) 之间的视觉断层。
 
-## Stage 1.4: 核心事件总线 (Event Bus) [进行中]
+## Stage 1.4: 核心事件总线 (Event Bus) [已完成]
 * **目标**：在 C++ 内部实现发布-订阅 (Pub/Sub) 模型。
 * **技术细节**：利用 `std::any` 进行类型擦除，支持任意数据结构的事件分发。
 * **工程意义**：彻底解除 `World` 与具体实体逻辑的强耦合。当史莱姆死亡或环境突变时，通过总线广播信号，这是未来 LLM 注入“全局 Mod”或监听世界动态的神经枢纽。
 
-## Stage 1.5: 闭环指令集枢纽 (Input Oracle) [新增/待办]
+## Stage 1.5: 闭环指令集枢纽 (Input Oracle) [已完成]
 * **目标**：打通 `Frontend -> Server -> Engine` 的逆向控制链路，让引擎不再是“聋子”。
 * **待办任务**：
     1. **Stdin 监听**：在 C++ `main.cpp` 中开辟异步线程或非阻塞轮询 `std::cin`。
     2. **指令协议设计**：制定一套极简的命令解析协议（如 `SPAWN_ENTITY <type> <x> <y>` 或 `FORCE_MOVE <id> <x> <y>`）。
     3. **Server 转发**：Node.js 监听前端交互事件，通过 `engineProcess.stdin.write` 下发上帝指令。
 
-## Stage 1.6: 数据真理同步 (Data Sync) [新增/待办]
+## Stage 1.6: 数据真理同步 (Data Sync) [进行中]
 * **目标**：解决 C++ 引擎与前端地图数据的“认知偏差”。
 * **待办任务**：
     1. **C++ JSON 解析器**：引入 `nlohmann/json` 或手写 Parser，让引擎在启动时读取 `assets/maps/temp.json`。
