@@ -1,9 +1,11 @@
 #include "core/World.h"
+#include "core/CommandQueue.h"
+#include "core/Logger.h"
 #include "entities/BaseEntity.h"
+#include "entities/EntityFactory.h"
 
 #include <algorithm>
 #include <fstream>
-#include <iostream>
 
 // 引入单头文件 JSON 库
 #include <nlohmann/json.hpp>
@@ -13,13 +15,16 @@ using json = nlohmann::json;
 namespace fsb {
 namespace core {
 
+// ============================================================================
+// 创世构造函数
+// ============================================================================
 World::World(const std::string& map_file_path)
     : current_tick_(0) {
     
     // 1. 读取并解析 Tiled JSON 地图文件
     std::ifstream file(map_file_path);
     if (!file.is_open()) {
-        std::cerr << "[World] FATAL ERROR: Cannot open map file: " << map_file_path << std::endl;
+        LOG_ERROR("FATAL: Cannot open map file: %s", map_file_path.c_str());
         exit(EXIT_FAILURE);
     }
 
@@ -57,9 +62,50 @@ World::World(const std::string& map_file_path)
         }
     }
 
-    std::cerr << "[World] Genesis complete. Map loaded: " << width_ << "x" << height_ << std::endl;
+    LOG_INFO("Genesis complete. Map loaded: %dx%d", width_, height_);
 }
 
+// ============================================================================
+// 指令仲裁：在 tick 之前统一消费 Intent 队列
+// ============================================================================
+void World::processIntents(CommandQueue& queue) {
+    // 批量消费：一次 tick 窗口内的所有 Intent 全部处理完毕
+    while (auto maybe_intent = queue.tryPop()) {
+        const Intent& intent = *maybe_intent;
+
+        switch (intent.type) {
+            case IntentType::SPAWN: {
+                // 实体 ID 的唯一性由单调递增的计数器保证
+                static int entity_id_counter = 1000;
+
+                // 将创造实体的重任全权委托给 EntityFactory
+                auto entity = fsb::entities::EntityFactory::create(
+                    intent.entity_type, entity_id_counter++, 
+                    intent.x, intent.y, *this
+                );
+
+                addEntity(entity);
+                LOG_INFO("Intent executed: SPAWN %s at (%d, %d)", 
+                         intent.entity_type.c_str(), intent.x, intent.y);
+                break;
+            }
+            case IntentType::QUIT: {
+                LOG_INFO("Intent received: QUIT. Engine will shut down.");
+                // QUIT 的传播由 main.cpp 的 is_running 标志处理，
+                // 此处仅做日志记录。实际退出逻辑在 main 循环中判断。
+                break;
+            }
+            case IntentType::UNKNOWN: {
+                // 已在 CommandQueue::parse 中记录日志，此处静默跳过
+                break;
+            }
+        }
+    }
+}
+
+// ============================================================================
+// 核心 Tick 生命周期
+// ============================================================================
 void World::tick() {
     current_tick_++;
     
@@ -68,11 +114,17 @@ void World::tick() {
     }
 }
 
+// ============================================================================
+// 实体管理
+// ============================================================================
 void World::addEntity(std::shared_ptr<fsb::entities::BaseEntity> entity) {
     entities_.push_back(entity);
 }
 
 void World::removeEntity(int entity_id) {
+    // 实体销毁时，先从 EventBus 注销其所有订阅，防止悬垂回调
+    event_bus_.unsubscribeAll(entity_id);
+
     entities_.erase(
         std::remove_if(entities_.begin(), entities_.end(),
             [entity_id](const std::shared_ptr<fsb::entities::BaseEntity>& e) {
@@ -82,6 +134,9 @@ void World::removeEntity(int entity_id) {
     );
 }
 
+// ============================================================================
+// 环境感知 API
+// ============================================================================
 int World::getTerrainAt(int x, int y) const {
     if (x < 0 || x >= width_ || y < 0 || y >= height_) {
         return -1; // 虚空/边界外
@@ -113,10 +168,15 @@ std::vector<std::shared_ptr<fsb::entities::BaseEntity>> World::getEntitiesInRang
     return result;
 }
 
-std::string World::exportStateAsJson() const {
+// ============================================================================
+// 状态导出 — 返回 JSON 对象，由调用方负责 dump + flush
+// ============================================================================
+nlohmann::json World::exportStateAsJson() const {
     // 彻底摒弃危险的字符串手工拼接，采用 nlohmann/json 结构化构建快照
     json j;
-    j["tick"] = current_tick_;
+
+    // 注入全局单调递增的 Tick ID，作为跨进程时钟同步的唯一序列号
+    j["tick_id"] = current_tick_;
     j["entities"] = json::array();
     
     for (const auto& entity : entities_) {
@@ -129,8 +189,7 @@ std::string World::exportStateAsJson() const {
         });
     }
     
-    // dump() 默认生成无缩进、无多余空格的紧凑字符串，极致节省 WebSocket 带宽
-    return j.dump(); 
+    return j;
 }
 
 } // namespace core
