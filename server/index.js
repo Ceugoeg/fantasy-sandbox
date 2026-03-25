@@ -1,6 +1,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const readline = require('readline');
 const WebSocket = require('ws');
 const { spawn } = require('child_process');
 
@@ -49,7 +50,7 @@ const wss = new WebSocket.Server({ server });
 wss.on('connection', (ws) => {
     console.log('Connected frontend renderer');
 
-    // 【新增】：监听前端发来的指令，并作为神谕转发给 C++ 引擎
+    // 监听前端发来的指令，并作为神谕转发给 C++ 引擎
     ws.on('message', (message) => {
         const cmd = message.toString().trim();
         console.log(`[Oracle Gateway] Passing command to engine: ${cmd}`);
@@ -82,15 +83,34 @@ if (!enginePath) {
 console.log(`Located engine: ${enginePath}`);
 const engineProcess = spawn(enginePath);
 
-// 监听引擎的 JSON 数据流并广播
-engineProcess.stdout.on('data', (data) => {
-    const jsonString = data.toString().trim();
-    // 过滤掉空行，防止前端 JSON 解析崩溃
-    if (!jsonString) return;
-    
+// ============================================================================
+// 【Stage 1.7 核心改造】NDJSON 粘包处理
+// ============================================================================
+// 旧方案：stdout.on('data') 直接 trim — 在高吞吐下必然出现粘包/截断。
+// 新方案：使用 readline 按 '\n' 严格切包，每行一个完整 JSON。
+// C++ 端保证每帧输出 dump() + '\n' + fflush(stdout)，二者配合消灭粘包。
+const rl = readline.createInterface({
+    input: engineProcess.stdout,
+    crlfDelay: Infinity   // 兼容 Windows 的 \r\n 行尾
+});
+
+rl.on('line', (line) => {
+    // readline 保证每次回调都是完整的一行，无需手动切割
+    const trimmed = line.trim();
+    if (!trimmed) return;  // 过滤空行，防止前端 JSON 解析崩溃
+
+    // 校验 JSON 合法性后再广播，绝不把脏数据推给前端
+    try {
+        JSON.parse(trimmed);  // 纯校验，不存储（原始字符串直接转发更高效）
+    } catch (e) {
+        console.error(`[NDJSON] Malformed JSON dropped: ${trimmed.substring(0, 80)}...`);
+        return;
+    }
+
+    // 广播给所有已连接的 WebSocket 前端渲染器
     wss.clients.forEach((client) => {
         if (client.readyState === WebSocket.OPEN) {
-            client.send(jsonString);
+            client.send(trimmed);
         }
     });
 });
