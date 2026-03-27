@@ -28,14 +28,14 @@
     2. **指令协议设计**：制定一套极简的命令解析协议（如 `SPAWN_ENTITY <type> <x> <y>` 或 `FORCE_MOVE <id> <x> <y>`）。
     3. **Server 转发**：Node.js 监听前端交互事件，通过 `engineProcess.stdin.write` 下发上帝指令。
 
-## Stage 1.6: 数据真理同步 (Data Sync) [进行中]
+## Stage 1.6: 数据真理同步 (Data Sync) [已完成]
 * **目标**：解决 C++ 引擎与前端地图数据的“认知偏差”。
 * **待办任务**：
     1. **C++ JSON 解析器**：引入 `nlohmann/json` 或手写 Parser，让引擎在启动时读取 `assets/maps/temp.json`。
     2. **地形注入**：将 JSON 中的 `layers.data` 自动映射到引擎的 `terrain_` 矩阵中。
     3. **动态同步**：确保引擎的 `getTerrainAt` 判定逻辑与前端看到的视觉图块完全一致。
 
-## Stage 1.7: 引擎稳健性加固 [新增/待办]
+## Stage 1.7: 引擎稳健性加固 [已完成]
 * **目标**：从“能跑”向“工业级”迁移。
 * **待办任务**：
     1. **Tick Rate 调节器**：摒弃不稳定的 `sleep_for`，实现基于时间戳差值的逻辑帧率控制器（Fixed Timestep）。
